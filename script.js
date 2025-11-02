@@ -47,8 +47,6 @@ const appState = {
     windSpeed: 'kmh',
     precipitation: 'mm'
   },
-  theme: 'dark',
-  favorites: JSON.parse(localStorage.getItem('weatherAppFavorites') || '[]'),
   selectedDay: 0 // For hourly forecast day selection
 };
 
@@ -247,119 +245,6 @@ const api = {
   }
 };
 
-// Theme Management
-const theme = {
-  init() {
-    console.log('Initializing theme system...');
-    this.bindEvents();
-
-    const savedTheme = localStorage.getItem('weatherAppTheme');
-    const autoTheme = localStorage.getItem('weatherAppAutoTheme') !== 'false';
-
-    console.log('Saved theme:', savedTheme);
-    console.log('Auto theme enabled:', autoTheme);
-
-    if (autoTheme && !savedTheme) {
-      this.setAutoTheme();
-    } else {
-      const themeToUse = savedTheme || 'dark';
-      this.setTheme(themeToUse);
-    }
-
-    this.updateThemeIcon();
-    console.log('Theme system initialized with theme:', appState.theme);
-  },
-
-  bindEvents() {
-    const themeToggle = document.getElementById('themeToggle');
-    if (themeToggle) {
-      themeToggle.addEventListener('click', () => {
-        this.toggle();
-      });
-
-      // Add keyboard support
-      themeToggle.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          this.toggle();
-        }
-      });
-    }
-
-    // Add keyboard shortcut (Ctrl/Cmd + Shift + T)
-    document.addEventListener('keydown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'T') {
-        e.preventDefault();
-        this.toggle();
-      }
-    });
-  },
-
-  setTheme(themeName) {
-    console.log('Setting theme to:', themeName);
-    appState.theme = themeName;
-    document.documentElement.setAttribute('data-theme', themeName);
-    localStorage.setItem('weatherAppTheme', themeName);
-    localStorage.setItem('weatherAppAutoTheme', 'false');
-    this.updateThemeIcon();
-
-    // Dispatch custom event for theme change
-    window.dispatchEvent(new CustomEvent('themeChanged', {
-      detail: { theme: themeName }
-    }));
-  },
-
-  setAutoTheme() {
-    const hour = new Date().getHours();
-    const isNight = hour < 6 || hour >= 18;
-    const autoTheme = isNight ? 'dark' : 'light';
-
-    appState.theme = autoTheme;
-    document.documentElement.setAttribute('data-theme', autoTheme);
-    localStorage.setItem('weatherAppAutoTheme', 'true');
-    this.updateThemeIcon();
-  },
-
-  toggle() {
-    const themeToggle = document.getElementById('themeToggle');
-
-    // Add visual feedback
-    if (themeToggle) {
-      themeToggle.style.transform = 'scale(0.95)';
-      setTimeout(() => {
-        themeToggle.style.transform = 'scale(1)';
-      }, 150);
-    }
-
-    const newTheme = appState.theme === 'dark' ? 'light' : 'dark';
-    this.setTheme(newTheme);
-
-    // Log theme change for debugging
-    console.log(`Theme switched to: ${newTheme}`);
-  },
-
-  updateThemeIcon() {
-    const themeIcon = document.getElementById('themeIcon');
-    const themeToggle = document.getElementById('themeToggle');
-
-    if (themeIcon && themeToggle) {
-      // Add transition class for smooth icon change
-      themeIcon.style.transition = 'opacity 0.2s ease-in-out';
-
-      if (appState.theme === 'dark') {
-        themeIcon.src = './assets/images/icon-sunny.webp';
-        themeIcon.alt = 'Switch to light mode';
-        themeToggle.setAttribute('aria-label', 'Switch to light mode');
-        themeToggle.setAttribute('title', 'Switch to light mode');
-      } else {
-        themeIcon.src = './assets/images/icon-overcast.webp';
-        themeIcon.alt = 'Switch to dark mode';
-        themeToggle.setAttribute('aria-label', 'Switch to dark mode');
-        themeToggle.setAttribute('title', 'Switch to dark mode');
-      }
-    }
-  }
-};
 
 // Animations and Visual Effects
 const animations = {
@@ -476,178 +361,6 @@ const animations = {
   }
 };
 
-// Favorites Management
-const favorites = {
-  init() {
-    this.bindEvents();
-    this.updateUI();
-  },
-
-  bindEvents() {
-    // Favorite button in current weather
-    const favoriteButton = document.getElementById('favoriteButton');
-    if (favoriteButton) {
-      favoriteButton.addEventListener('click', () => {
-        this.toggleCurrentLocation();
-      });
-    }
-
-    // Favorites dropdown
-    const favoritesButton = document.getElementById('favoritesButton');
-    const favoritesMenu = document.getElementById('favoritesMenu');
-
-    if (favoritesButton && favoritesMenu) {
-      favoritesButton.addEventListener('click', () => {
-        const isOpen = favoritesMenu.classList.contains('active');
-        if (isOpen) {
-          favoritesMenu.classList.remove('active');
-          favoritesButton.setAttribute('aria-expanded', 'false');
-        } else {
-          favoritesMenu.classList.add('active');
-          favoritesButton.setAttribute('aria-expanded', 'true');
-          this.updateFavoritesList();
-        }
-      });
-
-      // Close favorites menu when clicking outside
-      document.addEventListener('click', (e) => {
-        if (!favoritesButton.contains(e.target) && !favoritesMenu.contains(e.target)) {
-          favoritesMenu.classList.remove('active');
-          favoritesButton.setAttribute('aria-expanded', 'false');
-        }
-      });
-    }
-  },
-
-  toggleCurrentLocation() {
-    if (!appState.currentLocation) return;
-
-    const favoriteButton = document.getElementById('favoriteButton');
-
-    if (this.isFavorite(appState.currentLocation)) {
-      this.remove(appState.currentLocation);
-      favoriteButton.classList.remove('active');
-      favoriteButton.setAttribute('aria-label', 'Add to favorites');
-    } else {
-      this.add(appState.currentLocation);
-      favoriteButton.classList.add('active');
-      favoriteButton.setAttribute('aria-label', 'Remove from favorites');
-    }
-  },
-
-  add(location) {
-    const favorite = {
-      id: Date.now(),
-      name: location.name,
-      country: location.country,
-      latitude: location.latitude,
-      longitude: location.longitude
-    };
-
-    appState.favorites.push(favorite);
-    this.save();
-    this.updateUI();
-  },
-
-  remove(location) {
-    appState.favorites = appState.favorites.filter(fav =>
-      !(fav.latitude === location.latitude && fav.longitude === location.longitude)
-    );
-    this.save();
-    this.updateUI();
-  },
-
-  removeById(id) {
-    appState.favorites = appState.favorites.filter(fav => fav.id !== id);
-    this.save();
-    this.updateUI();
-  },
-
-  save() {
-    localStorage.setItem('weatherAppFavorites', JSON.stringify(appState.favorites));
-  },
-
-  isFavorite(location) {
-    return appState.favorites.some(fav =>
-      fav.latitude === location.latitude && fav.longitude === location.longitude
-    );
-  },
-
-  updateUI() {
-    // Update favorite button state
-    const favoriteButton = document.getElementById('favoriteButton');
-    if (favoriteButton && appState.currentLocation) {
-      if (this.isFavorite(appState.currentLocation)) {
-        favoriteButton.classList.add('active');
-        favoriteButton.setAttribute('aria-label', 'Remove from favorites');
-      } else {
-        favoriteButton.classList.remove('active');
-        favoriteButton.setAttribute('aria-label', 'Add to favorites');
-      }
-    }
-  },
-
-  updateFavoritesList() {
-    const favoritesList = document.getElementById('favoritesList');
-    const noFavorites = document.getElementById('noFavorites');
-
-    if (!favoritesList) return;
-
-    if (appState.favorites.length === 0) {
-      favoritesList.innerHTML = `
-        <div class="no-favorites">
-          <p>No saved locations yet</p>
-          <p class="text-small">Add locations to your favorites for quick access</p>
-        </div>
-      `;
-    } else {
-      const favoritesHTML = appState.favorites.map(favorite => `
-        <div class="favorite-item" data-favorite-id="${favorite.id}">
-          <div class="favorite-info">
-            <div class="favorite-name">${favorite.name}</div>
-            <div class="favorite-country">${favorite.country}</div>
-          </div>
-          <button class="favorite-remove" data-favorite-id="${favorite.id}" aria-label="Remove ${favorite.name} from favorites">
-            ×
-          </button>
-        </div>
-      `).join('');
-
-      favoritesList.innerHTML = favoritesHTML;
-
-      // Add event listeners
-      favoritesList.querySelectorAll('.favorite-item').forEach(item => {
-        item.addEventListener('click', (e) => {
-          if (e.target.classList.contains('favorite-remove')) return;
-
-          const favoriteId = parseInt(item.dataset.favoriteId);
-          const favorite = appState.favorites.find(fav => fav.id === favoriteId);
-
-          if (favorite) {
-            appState.currentLocation = favorite;
-            weather.loadWeatherData(favorite.latitude, favorite.longitude);
-
-            // Close favorites menu
-            const favoritesMenu = document.getElementById('favoritesMenu');
-            const favoritesButton = document.getElementById('favoritesButton');
-            if (favoritesMenu && favoritesButton) {
-              favoritesMenu.classList.remove('active');
-              favoritesButton.setAttribute('aria-expanded', 'false');
-            }
-          }
-        });
-      });
-
-      favoritesList.querySelectorAll('.favorite-remove').forEach(button => {
-        button.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const favoriteId = parseInt(button.dataset.favoriteId);
-          this.removeById(favoriteId);
-        });
-      });
-    }
-  }
-};
 
 // Geolocation
 const geolocation = {
@@ -914,9 +627,6 @@ const weather = {
     // Update forecasts
     this.updateDailyForecast(data);
     this.updateHourlyForecast(data);
-
-    // Update favorites UI
-    favorites.updateUI();
 
     // Update weather animations
     if (data.current && data.current.weather_code !== undefined) {
@@ -1318,12 +1028,6 @@ const initializeElements = () => {
   elements.unitsButton = document.getElementById('unitsButton');
   elements.unitsMenu = document.getElementById('unitsMenu');
 
-  // Favorites elements
-  elements.favoriteButton = document.getElementById('favoriteButton');
-  elements.favoritesButton = document.getElementById('favoritesButton');
-  elements.favoritesMenu = document.getElementById('favoritesMenu');
-  elements.favoritesList = document.getElementById('favoritesList');
-
   // Debug: Check if critical elements are found
   console.log('Critical elements found:');
   console.log('- loadingState:', !!elements.loadingState);
@@ -1341,17 +1045,11 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM elements initialized');
 
   // Initialize components
-  theme.init();
-  console.log('Theme initialized');
-
   search.init();
   console.log('Search initialized');
 
   units.init();
   console.log('Units initialized');
-
-  favorites.init();
-  console.log('Favorites initialized');
 
   animations.init();
   console.log('Animations initialized');
